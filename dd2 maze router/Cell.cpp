@@ -67,3 +67,4 @@ char Cell::get_pred()
 {
 	return pred;
 }
+
