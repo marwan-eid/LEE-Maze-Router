@@ -8,6 +8,7 @@ private:
 	int x, y; // coordinates
 	int layer; // layer where the cell resides on
 	int pathcost; // sum of all costs upto c
+	Cell* predecessor;
 
 public:
 	// setter functions
@@ -26,4 +27,6 @@ public:
 	int get_cost();
 	char get_pred();
 	bool get_reached();
+	Cell* predecessor;
+
 };
