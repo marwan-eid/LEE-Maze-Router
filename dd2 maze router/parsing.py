@@ -23,3 +23,9 @@ with open("file.txt", "r") as paragraphs_file:
             i+=1
 
             #print(result)
+Text = open("file.txt", "r")
+x = Text.read()
+pattern = r'^(NETS.*END NETS)'
+second = re.search(pattern, x, re.MULTILINE | re.DOTALL)
+print(second.group(0))
+
