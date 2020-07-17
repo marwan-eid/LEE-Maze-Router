@@ -14,7 +14,7 @@ using namespace std;
 #define bend_cost 10
 #define via_cost 20
 
-#define gCell_pred_bits 0x0FF000000
+#define gCell_pred_bits 0xFF000000
 #define gCell_obstacle_bit 0x00800000
 #define gCell_reached_bit 0x004000000
 #define gCell_layer_bits 0x003C0000
@@ -25,6 +25,16 @@ using namespace std;
 #define wfCell_pred_bits 0x000000FF00000000
 #define wfCell_cost_bits 0x00000000FFFFFFFF
 
+/*
+net1 (1, 42, 67) (1, 60, 14)
+net2 (1, 10, 20) (1, 30, 50)
+net3 (1, 104, 201) (1, 303, 502)
+*/
+/*
+net1 (1, 10, 10) (1, 15, 15)
+net2 (1, 14, 15) (1, 20, 20)
+net3 (1, 12, 14) (1, 17, 18)
+*/
 // Pins data
 struct pins {
 	int layer, x_coordinate, y_coordinate;
@@ -52,7 +62,7 @@ int calc_distance_to_center(pins pin)
 void read_line(string input_line, vector<pins>& pins_vector)
 {
 	pins pin;
-	int comma_substr, temp_pos, temp;
+	size_t comma_substr, temp_pos, temp;
 	do {
 		temp_pos = input_line.find("(") + 1;
 		comma_substr = input_line.find(",");
@@ -68,8 +78,9 @@ void read_line(string input_line, vector<pins>& pins_vector)
 	} while (input_line.find("(") != -1);
 }
 
-void predec_location(int& l, int& x, int& y, const char& direction)
+void predec_location(int& l, int& x, int& y, const char& direction, bool& source)
 {
+	source = false;
 	switch (direction)
 	{
 	case 'N':
@@ -79,10 +90,10 @@ void predec_location(int& l, int& x, int& y, const char& direction)
 		y++;
 		break;
 	case 'W':
-		x++;
+		x--;
 		break;
 	case 'E':
-		x--;
+		x++;
 		break;
 	case 'U':
 		l--;
@@ -91,6 +102,7 @@ void predec_location(int& l, int& x, int& y, const char& direction)
 		l++;
 		break;
 	default:
+		source = true;
 		break;
 	}
 }
@@ -102,7 +114,7 @@ long long convert_gridCell_to_wfCell(const int& gCell, const int& x, const int& 
 	 wavefront --> x, y, layer, pathcost, predecessor
 	 source --> indexed by x, y, layer (from pins_vector) (stores ..)
 	 x = 10 bits , y = 10 bits ; layer = 4 bits , predecessor = 8 bits , pathcost = 19 bits
-	#define gCell_pred_bits 0x0FF000000
+	#define gCell_pred_bits 0xFF000000
 	#define gCell_obstacle_bit 0x00800000
 	#define gCell_reached_bit 0x004000000
 	#define gCell_layer_bits 0x003C0000
@@ -114,19 +126,25 @@ long long convert_gridCell_to_wfCell(const int& gCell, const int& x, const int& 
 	#define wfCell_cost_bits 0x00000000FFFFFFFF
 	gCell -> pred = 8 bits, obstacle = 1 bit, reached = 1 bit, layer = 4 bit, cost = 18 bits
 	wfCell -> x = 10 bits, y = 10 bits, layer = 4 bits, predecessor = 8 bits, pathcost = 32 bits
+
+	gCell
+	100-0101-0000-0100-0000-0000-0000-0010
+	wfCell
+	10-0100-0001-0100-0001-0100-0000-0000-0000-0000-0000-0000-0000-0000-0010
+
 	*/
 	long long wfCell = 0;
-	wfCell = (((long long(x) << 54) & wfCell_x_bits) | ((long long(y) << 44) & wfCell_y_bits) |
-		(((long long(gCell) & gCell_layer_bits) << 22) & wfCell_layer_bits) |
-		(((long long(gCell) & gCell_pred_bits) << 8) & wfCell_pred_bits) |
-		((long long(gCell) & gCell_cost_bits) & wfCell_cost_bits));
+	//wfCell = (((long long(x) << 54) & wfCell_x_bits) | ((long long(y) << 44) & wfCell_y_bits) |
+	//	(((long long(gCell) & gCell_layer_bits) << 22) & wfCell_layer_bits) |
+	//	(((long long(gCell) & gCell_pred_bits) << 8) & wfCell_pred_bits) |
+	//	((long long(gCell) & gCell_cost_bits) & wfCell_cost_bits));
+	wfCell = (((long long(x) << 54)) | ((long long(y) << 44)) | ((long long(gCell) & gCell_layer_bits) << 22)
+		| ((long long(gCell) & gCell_pred_bits) << 8) | (long long(gCell) & gCell_cost_bits));
+//		((long long(gCell) & wfCell_layer_bits)));
+		//((long long(gCell) & wfCell_pred_bits) << 8) |
+		//((long long(gCell)) & wfCell_cost_bits));
 	return wfCell;
-
-	// wfCell
-	// 0000-0010-0100-0001-0100-0011-0000-0100-0000-0000-0000-0011-1111-1111-1111-1111
 }
-
-// 0000-0010-10    00-0001-0100-    0001    -0000-0000-      0000-0000-0000-0000-0000-0000-0000-0001
 
 bool route(vector<pins>& pins_vector, string& path_str)
 {
@@ -135,33 +153,40 @@ bool route(vector<pins>& pins_vector, string& path_str)
 	long long source = ((wfCell_x_bits) & (long long(pins_vector[0].x_coordinate) << 54));
 	source = source | ((long long(pins_vector[0].y_coordinate) << 44) & (wfCell_y_bits));
 	source = source | ((long long(pins_vector[0].layer) << 40) & (wfCell_layer_bits));
-	source = source | 1; //cost to the most right
-	wavefront.push(source);
+	source = source | 1; //cost is to the right most
+	layer_1[pins_vector[0].x_coordinate][pins_vector[0].y_coordinate] = layer_1[pins_vector[0].x_coordinate][pins_vector[0].y_coordinate] | (gCell_reached_bit);
 	long long target = ((wfCell_x_bits) & (long long(pins_vector[1].x_coordinate) << 54));
 	target = target | ((long long(pins_vector[1].y_coordinate) << 44) & (wfCell_y_bits));
 	target = target | ((long long(pins_vector[1].layer) << 40) & (wfCell_layer_bits));
-	target = target | 1; //cost to the most right
+	target = target | 1; //cost is to the rightmost
+	wavefront.push(source);
 	long long wf_top;
+	//int source_cost;
 	while ((layer_1[pins_vector[1].x_coordinate][pins_vector[1].y_coordinate] & gCell_reached_bit) != 1)
 	{
 		if (wavefront.empty()) // path not found
 			return false;
 		else
 		{
+			bool s;
 			wf_top = wavefront.top();
 			int x = (wf_top & (wfCell_x_bits)) >> 54;
 			int y = (wf_top & (wfCell_y_bits)) >> 44;
 			int l = (wf_top & (wfCell_layer_bits)) >> 40;
+			char dir = (wf_top & wfCell_pred_bits) >> 32;
 			if ((wf_top & (wfCell_x_bits | wfCell_y_bits | wfCell_layer_bits)) == (target & (wfCell_x_bits | wfCell_y_bits | wfCell_layer_bits)))
-			{
-				char dir;
-				while ((x != (source & wfCell_x_bits)) && (y != (source & wfCell_y_bits)) && (l != (source & wfCell_layer_bits)))
+			{	// && (l != ((source & wfCell_layer_bits) >> 40)
+				//while ((x != ((source & wfCell_x_bits) >> 54)) && (y != ((source & wfCell_y_bits) >> 44)))
+				while (source != layer_1[x][y])
 				{
 					string substr = " (" + to_string(l) + ", " + to_string(x) + ", " + to_string(y) + ") ";
 					path.push(substr);
 					layer_1[x][y] = layer_1[x][y] | (gCell_obstacle_bit);
-					dir = wf_top & (wfCell_pred_bits);
-					predec_location(l, x, y, dir); // must indicate obstacle
+					char dir_old = (layer_1[x][y] & gCell_pred_bits) >> 24;
+					predec_location(l, x, y, dir_old, s); // must indicate obstacle
+					dir = (layer_1[x][y] & gCell_pred_bits) >> 24;
+					if (s)
+						break;
 				}
 				while (!path.empty())
 				{
@@ -170,33 +195,33 @@ bool route(vector<pins>& pins_vector, string& path_str)
 				}
 				return true;
 			}
-			if (x > 0 && y > 0 && !(layer_1[x - 1][y] & (gCell_reached_bit)) && !(layer_1[x - 1][y] & (gCell_obstacle_bit)))
+			if (x > 0 && y > 0 && !(layer_1[x - 1][y] & gCell_reached_bit) && !(layer_1[x - 1][y] & gCell_obstacle_bit))
 			{
-				layer_1[x - 1][y] = layer_1[x - 1][y] | (gCell_reached_bit);
+				layer_1[x - 1][y] = layer_1[x - 1][y] | gCell_reached_bit;
 				// pathcost(N) = pathcost(C) + cellcost(N) --> support of A* heuristic
-				layer_1[x - 1][y] = layer_1[x][y] | (gCell_cost_bits) + layer_1[x - 1][y] | (gCell_cost_bits);
-				layer_1[x - 1][y] = layer_1[x - 1][y] | 'E';
+				layer_1[x - 1][y] += (layer_1[x][y] & gCell_cost_bits);
+				layer_1[x - 1][y] = layer_1[x - 1][y] | (long long('E') << 24);
 				wavefront.push(convert_gridCell_to_wfCell(layer_1[x - 1][y], x - 1, y));
 			}
-			if (x > 0 && y > 0 && !(layer_1[x][y - 1] & (gCell_reached_bit)) && !(layer_1[x][y - 1] & (gCell_obstacle_bit)))
+			if (x > 0 && y > 0 && !(layer_1[x][y - 1] & gCell_reached_bit) && !(layer_1[x][y - 1] & gCell_obstacle_bit))
 			{
-				layer_1[x][y - 1] = layer_1[x][y - 1] | (gCell_reached_bit);
-				layer_1[x][y - 1] = (layer_1[x][y] | (gCell_cost_bits)) + (layer_1[x][y - 1] | (gCell_cost_bits));
-				layer_1[x - 1][y] = layer_1[x - 1][y] | 'S';
+				layer_1[x][y - 1] = layer_1[x][y - 1] | gCell_reached_bit;
+				layer_1[x][y - 1] += (layer_1[x][y] & gCell_cost_bits) + bend_cost;
+				layer_1[x][y - 1] = layer_1[x][y - 1] | (long long('S') << 24);
 				wavefront.push(convert_gridCell_to_wfCell(layer_1[x][y - 1], x, y - 1));
 			}
-			if (x > 0 && y > 0 && !(layer_1[x + 1][y] & (gCell_reached_bit)) && !(layer_1[x + 1][y] & (gCell_obstacle_bit)))
+			if (x > 0 && y > 0 && !(layer_1[x + 1][y] & gCell_reached_bit) && !(layer_1[x + 1][y] & gCell_obstacle_bit))
 			{
-				layer_1[x + 1][y] = layer_1[x + 1][y] | (gCell_reached_bit);
-				layer_1[x + 1][y] = (layer_1[x][y] | (gCell_cost_bits)) + (layer_1[x + 1][y] | (gCell_cost_bits));
-				layer_1[x - 1][y] = layer_1[x - 1][y] | 'W';
+				layer_1[x + 1][y] = layer_1[x + 1][y] | gCell_reached_bit;
+				layer_1[x + 1][y] += (layer_1[x][y] & gCell_cost_bits);
+				layer_1[x + 1][y] = layer_1[x + 1][y] | (long long('W') << 24);
 				wavefront.push(convert_gridCell_to_wfCell(layer_1[x + 1][y], x + 1, y));
 			}
-			if (x > 0 && y > 0 && !(layer_1[x][y + 1] & (gCell_reached_bit)) && !(layer_1[x][y + 1] & (gCell_obstacle_bit)))
+			if (x > 0 && y > 0 && !(layer_1[x][y + 1] & gCell_reached_bit) && !(layer_1[x][y + 1] & gCell_obstacle_bit))
 			{
-				layer_1[x][y + 1] = layer_1[x][y + 1] | (gCell_reached_bit);
-				layer_1[x][y + 1] = (layer_1[x][y] | (gCell_cost_bits)) + (layer_1[x][y + 1] | (gCell_cost_bits));
-				layer_1[x - 1][y] = layer_1[x - 1][y] | 'N';
+				layer_1[x][y + 1] = layer_1[x][y + 1] | gCell_reached_bit;
+				layer_1[x][y + 1] += (layer_1[x][y] & gCell_cost_bits) + bend_cost;
+				layer_1[x][y + 1] = layer_1[x][y + 1] | (long long('N') << 24);
 				wavefront.push(convert_gridCell_to_wfCell(layer_1[x][y + 1], x, y + 1));
 			}
 			wavefront.pop();
@@ -204,21 +229,30 @@ bool route(vector<pins>& pins_vector, string& path_str)
 	}
 }
 
-/*
-net1 (1, 10, 20) (1, 30, 50)
-net2 (1, 100, 200) (1, 300, 50)
-*/
-
-int main()
+void initialize_layer()
 {
 	//initializing cells
+	int x_axis, y_axis;
+	// cin >> x_axis >> y_axis;
+	// 
 	int layer = 1;
 	for (int i = 0; i < 1000; i++)
 		for (int j = 0; j < 1000; j++)
 		{
-			layer_1[i][j] = 1;
-			layer_1[i][j] = (layer << 18) | layer_1[i][j];
+			layer_1[i][j] = (layer_1[i][j] & gCell_obstacle_bit);
+			layer_1[i][j] |= (layer << 18);
+			layer_1[i][j] |= 1;
 		}
+}
+
+void find_neareast_source()
+{
+
+}
+
+int main()
+{
+	int net_no = 1;
 	ifstream input_file;
 	ofstream output_file;
 	vector <pins> pins_vector;
@@ -232,6 +266,7 @@ int main()
 	}
 	while (!input_file.eof())
 	{
+		initialize_layer();
 		getline(input_file, input_line);
 		// Reading input file
 		read_line(input_line, pins_vector);
@@ -245,9 +280,10 @@ int main()
 		// CORE CODE HERE ..................... (for each line, u have some pins)
 		string path = "";
 		if (route(pins_vector, path))
-			cout << "path\n" << path << endl;
+			cout << "net" << net_no++ << path << endl << endl;
 		else
 			cout << "Couldn't route!\n";
+		pins_vector.clear();
 	}
 	input_file.close();
 	output_file.close();
