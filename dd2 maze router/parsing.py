@@ -93,7 +93,7 @@ with open("donia.txt", "r+") as lef_macros_file:
                 pin_positions.append(temp_pin)
                 #print(lef_layer)
 
-#for m in range(2):
+
     #conc = {lef_macro: pins_name[m], left_macro: pin_name[m+1]}
     #dicts.setdefault(macro_second, {})[pins_name] = 1
     dicts.setdefault(macro_second[0], []).append(pins_name)
@@ -101,6 +101,7 @@ with open("donia.txt", "r+") as lef_macros_file:
     '''IDs = dicts['FILL\n']
     Defaults = macro_second
     D = dict.fromkeys(IDs, Defaults)'''
+    print(dicts)
 
 
 def centroid(vertexes):
@@ -141,3 +142,13 @@ for m in range(pin_count):
 combined = dict(zip(pins_name, pin_position))
 combined2 = dict(zip(pins_name, layer_name))
 
+
+def common_entries(*dcts):
+    for i in set(dcts[0]).intersection(*dcts[1:]):
+        yield (i,) + tuple(d[i] for d in dcts)
+
+print(list(common_entries(combined, combined2)))
+'''
+print(combined)
+print(combined2)
+'''
