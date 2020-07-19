@@ -3,12 +3,10 @@ import matplotlib.pyplot as plt
 from matplotlib import colors 
 from matplotlib.colors import NoNorm
 import numpy as np
+
 pins = []
 nets = []
-#parsing the input file to be visualized
-parsed = input("please enter the name of file to be parsed:\n")
-parsed += ".txt"
-with open(parsed) as fp:
+with open("output_file.txt") as fp:
         while True:
             line = fp.readline()
             nets = line.split("net")
@@ -33,12 +31,9 @@ with open(parsed) as fp:
                 comma_pos = line.find(")")
                 cell_y = int(line[0: comma_pos])
                 pin.append([cell_layer,cell_x,cell_y])
-                
             pins.append(pin)
 input_pins=[]
-#Reading main pins from input file
-input_parsed = input("please enter the name of the file contatining main pins to be parsed:\n")
-input_parsed += ".txt"
+
 with open("input_file.txt") as fp:
         while True:
             line = fp.readline()
@@ -72,14 +67,11 @@ n_layers = int(input("please enter number of layers: \n"))
 def initialize_layer(foo):
     foo[:] = [[[0 for k in range(h)] for j in range(h)] for i in range(n_layers)]
 
-   
-
-#setting the values for each cell either a wire or a pin.
 grids=[]
 Matrix=[]
 for k in range(n_layers):
     initialize_layer(grids)
-for nets in input_pins:  # mark input pins from file as pins
+for nets in input_pins:
     for pin in nets:
         layer= pin[0]
         cell_x = pin[1]
@@ -96,10 +88,8 @@ for nets in pins:
     cell_ll =last[0]
     cell_xx= last[1]
     cell_yy= last[2]
-    grids[cell_ll-1][cell_yy-1][cell_xx-1]=2
+    grids[cell_ll-1][cell_yyy-1][cell_xxx-1]=2
 
-    
-   
     for pin in nets:
         layer= pin[0]
         cell_x = pin[1]
@@ -107,21 +97,13 @@ for nets in pins:
         if ( grids[layer-1][cell_y-1][cell_x-1] != 2):
             grids[layer-1][cell_y-1][cell_x-1]=1
 
-
-
-
-#Displaying the layers
 for i in range(n_layers):
     cmap = colors.ListedColormap(['black','red','yellow'])
     plt.grid(False)
     plt.imshow(grids[i],cmap=cmap, vmin=0 , vmax=2)
     plt.show()
-
-
-#saving the Grid in a text file   
+    
     for i in range(n_layers):
         text_file = "layer" + str(i) +".txt"
         with open(text_file, 'w') as file:
             file.writelines('\t'.join(str(j) for j in i) + '\n' for i in grids[i])
-    
-    
