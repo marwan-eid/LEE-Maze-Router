@@ -181,6 +181,9 @@ bool route_source_target_find_next_source(long long& source, long long& target, 
 	int expanded_cells = 0;
 	long long next_source_cell = 0;
 	int min_distance_next_targ = INT_MAX, temp_distance;
+	if (((source & (wfCell_x_bits)) >> 54) > 999 || ((source & (wfCell_y_bits)) >> 44) > 999 || ((source & (wfCell_layer_bits)) >> 40) > 15 ||
+		((target & (wfCell_x_bits)) >> 54) > 999 || ((target & (wfCell_y_bits)) >> 44) > 999 || ((target & (wfCell_layer_bits)) >> 40) > 15)
+		return false;
 	int source_x = (source & (wfCell_x_bits)) >> 54;
 	int source_y = (source & (wfCell_y_bits)) >> 44;
 	int source_layer = (source & (wfCell_layer_bits)) >> 40;
@@ -354,79 +357,95 @@ int main()
 	input_file.open("input_file.txt");
 	while (!input_file.eof())
 	{
+		bool single_pen = false;
+		bool route = false;
 		int pins_index = 1;
 		for (int i = 1; i <= no_layers; i++)
 			initialize_layer(i);
 		getline(input_file, input_line);
 		// Reading input file
+		if (input_line.find("n") == -1)
+			continue;
 		read_line(input_line, pins_vector);
 		// Sorting nearest to boundary for starting point selection /////////////// NEED TO EDIT THIS /////////////////////
 		//sort(pins_vector.begin(), pins_vector.end(), [](const pins& lhs, const pins& rhs) {
 			//return lhs.distance_to_center > rhs.distance_to_center;
 			//});
 		string path = "";
-		output_file << "net " << net_no++ << " ";
+		if (net_no == 1)
+			path = "net" + to_string(net_no++) + " ";
+		else
+			path = "\nnet" + to_string(net_no++) + " ";
 		if (pins_index == 1)
 		{
 			pins_index++;
 			int pin1_x = pins_vector[0].x_coordinate;
 			int pin1_y = pins_vector[0].y_coordinate;
 			int pin1_layer = pins_vector[0].layer;
-			int pin2_x = pins_vector[1].x_coordinate;
-			int pin2_y = pins_vector[1].y_coordinate;
-			int pin2_layer = pins_vector[1].layer;
 			source = ((wfCell_x_bits) & (long long(pin1_x) << 54));
 			source |= ((long long(pin1_y) << 44) & (wfCell_y_bits));
 			source |= ((long long(pin1_layer) << 40) & (wfCell_layer_bits));
 			source |= 1;
 			(layers_vector[pin1_layer].grid)[pin1_x][pin1_y] |= gCell_reached_bit;
-			target = ((wfCell_x_bits) & (long long(pin2_x) << 54));
-			target |= ((long long(pin2_y) << 44) & (wfCell_y_bits));
-			target |= ((long long(pin2_layer) << 40) & (wfCell_layer_bits));
-			target |= 1;
-			pins_vector.erase(pins_vector.begin());
-			pins_vector.erase(pins_vector.begin());
+			if (pins_vector.size() == 1)
+			{
+				path += "(" + to_string(pin1_layer) + ", " + to_string(pin1_x) + ", " + to_string(pin1_y) + ")";
+				//output_file << path;
+				route = true;
+				pins_vector.erase(pins_vector.begin());
+				single_pen = true;
+			}
+			else
+			{
+				int pin2_x = pins_vector[1].x_coordinate;
+				int pin2_y = pins_vector[1].y_coordinate;
+				int pin2_layer = pins_vector[1].layer;
+				target = ((wfCell_x_bits) & (long long(pin2_x) << 54));
+				target |= ((long long(pin2_y) << 44) & (wfCell_y_bits));
+				target |= ((long long(pin2_layer) << 40) & (wfCell_layer_bits));
+				target |= 1;
+				pins_vector.erase(pins_vector.begin());
+				pins_vector.erase(pins_vector.begin());
+			}
 		}
-		if (pins_vector.size() == 0)
+		if (!single_pen && pins_vector.size() == 0)
 		{
-			path = "";
 			if (route_source_target_find_next_source(source, target, 0, 0, path))
-				output_file << path;
+				route = true;//output_file << path
 			else
 				cout << "Couldn't route net " << net_no - 1 << "\n";
 		}
-		else
+		else if (!single_pen)
 		{
 			while (pins_vector.size() > 0)
 			{
-				path = "";
 				next_target = ((wfCell_x_bits) & (long long(pins_vector[0].x_coordinate) << 54));
 				next_target |= ((long long(pins_vector[0].y_coordinate) << 44) & (wfCell_y_bits));
 				next_target |= ((long long(pins_vector[0].layer) << 40) & (wfCell_layer_bits));
 				next_target |= 1;
 				if (route_source_target_find_next_source(source, target, next_target, 1, path))
-					output_file << path;
+					route = true;// output_file << path;
 				else
 					cout << "Couldn't route pin " << pins_index++ << " in net " << net_no - 1 << " to the net.\n";
 				pins_vector.erase(pins_vector.begin());
 				for (int i = 0; i < no_layers; i++)
 					initialize_layer(i);
 			}
-			path = "";
 			if (route_source_target_find_next_source(source, target, 0, 0, path))
-				output_file << path;
+				route = true;//output_file << path;
 			else
 			{
 				for (int i = 1; i <= no_layers; i++)
 					initialize_layer(i);
 				if (route_source_target_find_next_source(source, target, 0, 0, path))
-					output_file << path;
+					route = true;// output_file << path;
 				else
 					cout << "Couldn't route last pin in net " << net_no - 1 << ".\n";
 			}
 		}
 		pins_vector.clear();
-		output_file << "\n";
+		if (route)
+			output_file << path;
 	}
 	input_file.close();
 	output_file.close();
