@@ -8,7 +8,133 @@ pattern = r'^(NETS.*END NETS)'
 second = re.search(pattern, x, re.MULTILINE | re.DOTALL)
 file1.write(second.group(0))
 
+'''
+This function basically build the struct for storing each macro with its corrosponding 
+pins and each pin with it corrosponding pin positions and maetal layer
+'''
+def getstruct(inputmacroname, inputpinname, macrounit):
+    file1 = open('file_elf.txt', 'r')
+    lines = file1.readlines()
+    macroname = ''
+    pinname = []
+    layer = ''
+    xindex = yindex = 0
+    xlist = []
+    ylist = []
+    flag2 = False
+    flag = False
+    '''
+    this loops over every macro and start extract the pin information from each one
+    '''
+    for line in lines:
+        words = line.split()
+        if(len(words) == 0):
+            flag = False
+        if(len(words) == 2):
+            if(words[0] == 'MACRO'):
+                if(words[1] == inputmacroname):
+                    flag = True
+        if(len(words) == 2):
+            if(words[0] == 'PIN'):
+                if(words[1] == inputpinname):
+                    flag2 = True
+        #This for making sure that we have reached the edn of the given pin
+        if(flag2 and len(words) == 2 and words[0] == 'END' and words[1] == inputpinname):
+            flag2 = False
+            _x_list = [float(x) for x in xlist]
+            _y_list = [float(y) for y in ylist]
+            _len = len(xlist)
+            _x = sum(_x_list) / _len
+            _y = sum(_y_list) / _len
+            return(_x*macrounit, _y*macrounit)
+        if(flag2):
+        #this ensures that we have already parsing inside a specific pin
+            if(len(words) > 0 and words[0] == 'LAYER'):
+                layer = words[1][5:]
+        #this to get the coordinates of each pin
+            if(len(words) > 0 and words[0] == 'RECT'):
+                xlist.append(words[1])
+                xlist.append(words[3])
+                ylist.append(words[2])
+                ylist.append(words[4])
+    '''
+    it basically gets the centroid of the RECT coordinates 
+    '''
+    _x_list = xlist
+    _y_list = ylist
+    _len = len(xlist)
+    _x = sum(_x_list) / _len
+    _y = sum(_y_list) / _len
+    return(_x, _y)
+
+'''
+This function basically gets all the required information fron the router input file
+it does so by looping over all the nets inside the def file and extracting all the corosponidng macros 
+and pins and then search inside the lef file for the pin positions
+'''
+def getall(macrosize):
+    file1 = open('file_elf.txt', 'r')
+    lines = file1.readlines()
+    macroname = ''
+    pinname = []
+    layer = ''
+    xindex = yindex = 0
+    xlist = []
+    ylist = []
+    flag2 = False
+    flag = False
+    currentmacro = ''
+    currentpin = ''
+    allmacros = {}
+    currentmacropins = {}
+    for line in lines:
+        words = line.split()
+        if(len(words) == 0):
+            flag = False
+            allmacros[currentmacro] = currentmacropins.copy()
+            currentmacropins.clear()
+            currentmacro = ''
+        if(len(words) == 2):
+            if(words[0] == 'MACRO'):
+                flag = True
+                currentmacro = words[1]
+        if(len(words) == 2):
+            if(words[0] == 'PIN'):
+                flag2 = True
+                currentpin = words[1]
+        if(flag2 and len(words) == 2 and words[0] == 'END' and words[1] == currentpin):
+            flag2 = False
+            _x_list = [float(x)*macrosize for x in xlist]
+            _y_list = [float(y)*macrosize for y in ylist]
+            _len = len(xlist)
+            _x = round(sum(_x_list) / _len)
+            _y = round(sum(_y_list) / _len)
+            currentmacropins[currentpin] = (layer, _x, _y)
+        if(flag2):
+            if(len(words) > 0 and words[0] == 'LAYER'):
+                layer = words[1][5:]
+            if(len(words) > 0 and words[0] == 'RECT'):
+                xlist.append(words[1])
+                xlist.append(words[3])
+                ylist.append(words[2])
+                ylist.append(words[4])
+    return allmacros
+
+#it here assumes that the macron unit inside the def file is 100
+don = getall(100)
+#This to get the centroid of the coordinates
+def centroid(xlist, ylist):
+    _x_list = xlist
+    _y_list = ylist
+    _len = len(xlist)
+    _x = sum(_x_list) / _len
+    _y = sum(_y_list) / _len
+    return(_x, _y)
+#This for parsing the def file
 with open("write.txt", "r") as paragraphs_file:
+    allnets = {}
+    currentdict = {}
+    currentnet = ''
     for paragraph in paragraphs_file:
         if paragraph.startswith('NETS'):
             for word in paragraph.split():
@@ -26,130 +152,49 @@ with open("write.txt", "r") as paragraphs_file:
             del string[2]
         if len(string) > 2:
             del string[2]
-        #string basically is a list that contains all the parsed nets with its corrosponding pins from def
-        #print(string)
-
-
-elf_Text = open("lef.txt", "r")
-elf_file = open("file_elf.txt", "w")
-elf_x = elf_Text.read()
-elf_pattern = r'^(MACRO.+END LIBRARY)'
-elf_second = re.search(elf_pattern, elf_x, re.MULTILINE | re.DOTALL)
-elf_file.write(elf_second.group(0))
-elf_file2 = open("file_elf.txt", "r")
-elf_x2 = elf_file2.read()
-
-i = 0
-macro_second = []
-macro_second2 = []
-macro_second3=[]
-pins_name = []
-layer_name = []
-pin_positions = []
-b = []
-arg = []
-dicts = {}
-with open("file_elf.txt", "r") as lef_paragraphs_file:
-    for lef_paragraph in lef_paragraphs_file:
-        if re.match(r'MACRO', lef_paragraph):
-           lef_macro = lef_paragraph.split(' ')[1]
-           lef_macro_final = 'END' + " " + lef_macro
-           lef_macro_start = 'MACRO' + " " + lef_macro
-           #print(lef_macro)
-           macro_second.append(lef_macro_final)
-           macro_second2.append(lef_macro_start)
-           macro_second3.append(lef_macro)
-           i += 1
+        # string basically is a list that contains all the parsed nets with its corrosponding pins from def
+        if(string[0] == '-'):
+            currentnet = string[1]
+            currentdict.clear()
+            allnets[currentnet] = []
         else:
-            continue
-
-z = 0
-for x in range (len(macro_second2)):
-    elf_file_macro = open("donia.txt", "r+")
-    content = elf_file_macro.read()
-    pin_count = sum(
-        1 for match in re.finditer(r"\bPIN\b", content))
-    #macro_second.pop(0)
-    z+=1
-    #print(z,pin_count)
-    elf_pattern2 = r'^' + re.escape(macro_second2[x]) + \
-        '.+' + re.escape(macro_second[x])
-    elf_second2 = re.search(elf_pattern2, elf_x2,
-                            re.MULTILINE | re.DOTALL)
-    elf_file_macro.seek(0)
-    elf_file_macro.truncate()
-    elf_file_macro.write((elf_second2.group(0)))
-    elf_file_macro.close()
-    with open("donia.txt", "r") as lef_macros_file:
-        for lef_macros in lef_macros_file:
-            if lef_macros.startswith(" ") or lef_macros.startswith("   "):
-                temp_pin = lef_macros.split()
-                #print(temp_pin)
-                if 'PIN' in temp_pin:
-                    lef_pin = lef_macros.split(' ')[3]
-                    pins_name.append(lef_pin)
-                if 'LAYER' in temp_pin:
-                    lef_layer = lef_macros.split(' ')[7]
-                    #print(lef_layer)
-                    layer_name.append(lef_layer)
-                if 'RECT' in temp_pin:
-                    pin_positions.append(temp_pin)
-        for f in range(pin_count):
-            dicts.setdefault(macro_second3[x], []).append(pins_name[0])
-            popp = pins_name.pop(0)
-            #print(popp)
-
-def centroid(vertexes):
-    _x_list = [vertex[0] for vertex in vertexes]
-    _y_list = [vertex[1] for vertex in vertexes]
-    _len = len(vertexes)
-    _x = sum(_x_list) / _len
-    _y = sum(_y_list) / _len
-    return(_x, _y)
-
-
-c = []
-final2 = []
-new_position = []
-pin_position = []
-
-
-def ayhaga(list):
-    for i in list:
-        b.append(float(i))
-    return b
-
-
-def convert(list):
-    return tuple(list)
-
-
-R = []
-new_temp = []
-for m in range(pin_count):
-    pin_positions[m].pop(-1)
-    pin_positions[m].pop(0)
-    pin_positions[m] = [float(i) for i in pin_positions[m]]
-    for d in range(4):
-        temp = pin_positions[m]
-        new_temp.append(temp[d]*100)
-    final2 = centroid(
-        convert(zip(new_temp[::2], new_temp[1::2])))  # (0.5, 0.5)
-    pin_position.append(final2)
-    '''#print(type(final2))
-    out = list(itertools.chain(float)(*(final2)))
-    print(out)
-    final = dict(zip(pins_name, R))
-    #print(final)'''
-
-combined = dict(zip(pins_name, pin_position))
-combined2 = dict(zip(pins_name, layer_name))
-
-def common_entries(*dcts):
-    for i in set(dcts[0]).intersection(*dcts[1:]):
-        yield (i,) + tuple(d[i] for d in dcts)
-
-
-#print(list(common_entries(combined, combined2)))
-
-print(dicts)
+            if(string[0].find('_') != -1):
+                currentdict[string[0][:string[0].find('_')]] = string[1]
+            else:
+                currentdict[string[0]] = string[1]
+            allnets[currentnet] = currentdict.copy()
+        print(string)
+Text.close()
+Text = open("file.txt", "r")
+#starting from here, we parse the def file to know the micron unit used to calculating the 
+#centroid of the pins
+getmacrosize = Text.readlines()
+macronsize = 0
+for line in getmacrosize:
+    words = line.split()
+    if len(words) > 0 and words[0] == 'UNITS':
+        macronsize = int(words[3])
+netcoo = {}
+for net in allnets:
+    if not net.startswith('select') and not net.startswith('grant') and not net.startswith('active'):
+        netcoo[net] = []
+        for key in allnets[net]:
+            alll = getall(macronsize)
+            if(key in alll):
+                dataa = alll[key][allnets[net][key]]
+            netcoo[net].append(
+                ' (' + str(dataa[0]) + ', ' + str(dataa[1]) + ', ' + str(dataa[2])+')')
+#Here for writing the output from this parsing and then be the input file for the router
+f = open('output.txt', 'w')
+netcount = 0
+for net in netcoo:
+    stringgg = 'net'+str(netcount) + ' '.join(netcoo[net])
+    print(stringgg)
+    f.write(stringgg + '\n')
+    netcount += 1
+#to erase the last line
+with open('output.txt', 'rb+') as filehandle:
+    filehandle.seek(-1, os.SEEK_END)
+    filehandle.truncate()
+f.close()
+pass
