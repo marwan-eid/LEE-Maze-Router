@@ -1,6 +1,7 @@
 # lee maze router
 a maze router that depends on Lee's algorithm in solving the routing problem. It depends om djkstra's algorithm in finding the shortest path between two pins. It Uses bits of integer variables to encode required information in the two main data structures : 2D array two represent the grid and a priority queue to represent the wavefront [the active cells of the grid]. The code is developed in C++ . The def/lef parser the generates the input file is developed in python. the visualizer is developed in python.
-All copyrights © goes to Mohammed Abuelwafa, Donia Ghazy and Marwan Eid.
+All copyrights © goes to Mohammed Abuelwafa, Donia Ghazy and Marwan Eid. 
+Acknowledging the American university in Cairo and digital Design 2 course.
 
 # Assumptions
 1) The input file follows this format: 
