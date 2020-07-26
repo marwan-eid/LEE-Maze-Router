@@ -11,8 +11,8 @@
 
 using namespace std;
 
-#define bend_cost 250
-#define via_cost 25
+#define bend_cost 999
+#define via_cost 499
 
 #define gCell_pred_bits 0xFF000000
 #define gCell_obstacle_bit 0x00800000
@@ -61,6 +61,8 @@ void read_line(string input_line, vector<pins>& pins_vector)
 {
 	pins pin;
 	size_t comma_substr, temp_pos;
+	if (int(input_line[0]) == 0)
+		return;
 	do {
 		temp_pos = input_line.find("(") + 1;
 		comma_substr = input_line.find(",");
@@ -71,7 +73,8 @@ void read_line(string input_line, vector<pins>& pins_vector)
 		input_line = input_line.substr(comma_substr + 2);
 		comma_substr = input_line.find(")");
 		pin.y_coordinate = atoi(input_line.substr(0, comma_substr).c_str());
-		pin.distance_to_center = calc_distance_to_center(pin);
+		//pin.distance_to_center = calc_distance_to_center(pin);
+		pin.distance_to_center = input_line.size();
 		pins_vector.push_back(pin);
 	} while (input_line.find("(") != -1);
 }
@@ -86,7 +89,6 @@ int heuristic_cost(const int& neighbor_x, const int& neighbor_y, const int& neig
 {
 	int delta_x = abs(int((neighbor_x)-((target & wfCell_x_bits) >> 54)));
 	int delta_y = abs(int((neighbor_y)-((target & wfCell_y_bits) >> 44)));
-	int delta_layer = abs(int((neighbor_layer)-((target & wfCell_layer_bits) >> 40)));
 	if (neighbor_layer % 2)
 	{
 		delta_x /= 2;
@@ -97,7 +99,7 @@ int heuristic_cost(const int& neighbor_x, const int& neighbor_y, const int& neig
 		delta_x *= 2;
 		delta_y /= 2;
 	}
-	return max(delta_layer, max(delta_x, delta_y));
+	return min(delta_x, delta_y);
 }
 
 // A function to change the coordinates of a cell based on the direction of its precedent cell
@@ -151,7 +153,7 @@ void initialize_layer(int layer_index)
 			(layers_vector[layer_index].grid)[i][j] &= gCell_obstacle_bit;
 			(layers_vector[layer_index].grid)[i][j] |= (layer_index << 18);
 			(layers_vector[layer_index].grid)[i][j] |= 1;
-			//(layers_vector[layer_index].grid)[i][j] &= ~(gCell_reached_bit);
+			(layers_vector[layer_index].grid)[i][j] &= ~(gCell_reached_bit);
 			//if ((layers_vector[layer_index].grid)[i][j] & gCell_reached_bit)
 			//if ((layers_vector[layer_index].grid)[i][j] & gCell_reached_bit)
 			//	(layers_vector[layer_index].grid)[i][j] &= ~(1UL << 22);
@@ -268,7 +270,7 @@ bool route_source_target_find_next_source(long long& source, long long& target, 
 			if (x > 0 && !((layers_vector[l].grid)[x - 1][y] & gCell_reached_bit) && !((layers_vector[l].grid)[x - 1][y] & gCell_obstacle_bit))
 			{
 				(layers_vector[l].grid)[x - 1][y] |= gCell_reached_bit;
-				(layers_vector[l].grid)[x - 1][y] += ((layers_vector[l].grid)[x][y] & gCell_cost_bits) + heuristic_cost(x - 1, y, l, target) + bend_cost;
+				(layers_vector[l].grid)[x - 1][y] += ((layers_vector[l].grid)[x][y] & gCell_cost_bits) + heuristic_cost(x - 1, y, l, target);
 				if (!(l % 2))
 					(layers_vector[l].grid)[x - 1][y] += bend_cost;
 				(layers_vector[l].grid)[x - 1][y] |= (long long('E') << 24);
@@ -286,7 +288,7 @@ bool route_source_target_find_next_source(long long& source, long long& target, 
 			if (x < 999 && !((layers_vector[l].grid)[x + 1][y] & gCell_reached_bit) && !((layers_vector[l].grid)[x + 1][y] & gCell_obstacle_bit))
 			{
 				(layers_vector[l].grid)[x + 1][y] = (layers_vector[l].grid)[x + 1][y] | gCell_reached_bit;
-				(layers_vector[l].grid)[x + 1][y] += ((layers_vector[l].grid)[x][y] & gCell_cost_bits) + heuristic_cost(x + 1, y, l, target) + bend_cost;
+				(layers_vector[l].grid)[x + 1][y] += ((layers_vector[l].grid)[x][y] & gCell_cost_bits) + heuristic_cost(x + 1, y, l, target);
 				if (!(l % 2))
 					(layers_vector[l].grid)[x + 1][y] += bend_cost;
 				(layers_vector[l].grid)[x + 1][y] |= (long long('W') << 24);
@@ -320,6 +322,41 @@ bool route_source_target_find_next_source(long long& source, long long& target, 
 	}
 }
 
+// A function to reorder the nets to be routed so as to reduce the number of nets that fail or partially fail to route
+void reorder_nets()
+{
+	ifstream input_file;
+	input_file.open("input_file.txt");
+	if (!input_file.is_open())
+	{
+		cout << "Unable to open input file\n";
+		return;
+	}
+	string input_line;
+	vector <string> nets;
+	while (!input_file.eof())
+	{
+		getline(input_file, input_line);
+		if (int(input_line[0]) == 0)
+			break;
+		nets.push_back(input_line);
+	}
+	input_file.close();
+	sort(nets.begin(), nets.end(), [](const string& input_line_1, const string& input_line_2) {
+		return input_line_1.size() < input_line_2.size();
+		});
+	ofstream output_file;
+	output_file.open("input_file.txt", ios::out | ios::trunc);
+	while (nets.size() > 1)
+	{
+		output_file << nets[0] << endl;
+		nets.erase(nets.begin());
+	}
+	output_file << nets[0];
+	nets.clear();
+	output_file.close();
+}
+
 /*
 The main function used to drive the program. The user is prompted to enter the number of
 layers (maximum number of a layer used in the input file), reads the input file, and routes each net.
@@ -329,11 +366,13 @@ int main()
 	cout << "Please enter the number of layers:\n";
 	cin >> no_layers;
 	layers_vector.resize(long long(no_layers) + 1);
+	reorder_nets();
 	int net_no = 1;
+	int successful = 0, unsuccessful = 0, partial = 0;
 	long long source, target, next_target;
 	ifstream input_file;
 	ofstream output_file;
-	vector <pins> pins_vector, sources;
+	vector <pins> pins_vector;
 	string input_line;
 	input_file.open("input_file.txt");
 	output_file.open("output_file.txt", ios::out | ios::trunc);
@@ -343,15 +382,16 @@ int main()
 		return 0;
 	}
 	// mark pins' cells as obstacles
+	for (int i = 1; i <= no_layers; i++)
+		initialize_layer(i);
 	while (!input_file.eof())
 	{
-		for (int i = 1; i <= no_layers; i++)
-			initialize_layer(i);
 		getline(input_file, input_line);
-		// Reading input file
 		read_line(input_line, pins_vector);
 	}
 	mark_pins_obstacles(pins_vector);
+	for (int i = 1; i <= no_layers; i++)
+		initialize_layer(i);
 	pins_vector.clear();
 	input_file.close();
 	input_file.open("input_file.txt");
@@ -364,7 +404,8 @@ int main()
 			initialize_layer(i);
 		getline(input_file, input_line);
 		// Reading input file
-		if (input_line.find("n") == -1)
+		//if (input_line.find("n") == -1)
+		if (!(int(input_line[0]) >= 65 && int(input_line[0]) <= 90) && !(int(input_line[0]) >= 97 && int(input_line[0]) <= 122))
 			continue;
 		read_line(input_line, pins_vector);
 		// Sorting nearest to boundary for starting point selection /////////////// NEED TO EDIT THIS /////////////////////
@@ -390,10 +431,10 @@ int main()
 			if (pins_vector.size() == 1)
 			{
 				path += "(" + to_string(pin1_layer) + ", " + to_string(pin1_x) + ", " + to_string(pin1_y) + ")";
-				//output_file << path;
 				route = true;
 				pins_vector.erase(pins_vector.begin());
 				single_pen = true;
+				successful++;
 			}
 			else
 			{
@@ -411,9 +452,15 @@ int main()
 		if (!single_pen && pins_vector.size() == 0)
 		{
 			if (route_source_target_find_next_source(source, target, 0, 0, path))
-				route = true;//output_file << path
+			{
+				route = true;
+				successful++;
+			}
 			else
+			{
 				cout << "Couldn't route net " << net_no - 1 << "\n";
+				unsuccessful++;
+			}
 		}
 		else if (!single_pen)
 		{
@@ -424,29 +471,42 @@ int main()
 				next_target |= ((long long(pins_vector[0].layer) << 40) & (wfCell_layer_bits));
 				next_target |= 1;
 				if (route_source_target_find_next_source(source, target, next_target, 1, path))
-					route = true;// output_file << path;
+					route = true;
 				else
+				{
+					partial++;
 					cout << "Couldn't route pin " << pins_index++ << " in net " << net_no - 1 << " to the net.\n";
+				}
 				pins_vector.erase(pins_vector.begin());
-				for (int i = 0; i < no_layers; i++)
+				for (int i = 1; i <= no_layers; i++)
 					initialize_layer(i);
 			}
 			if (route_source_target_find_next_source(source, target, 0, 0, path))
-				route = true;//output_file << path;
+			{
+				successful++;
+				route = true;
+			}
 			else
 			{
 				for (int i = 1; i <= no_layers; i++)
 					initialize_layer(i);
 				if (route_source_target_find_next_source(source, target, 0, 0, path))
-					route = true;// output_file << path;
+				{
+					successful++;
+					route = true;
+				}
 				else
+				{
+					partial++;
 					cout << "Couldn't route last pin in net " << net_no - 1 << ".\n";
+				}
 			}
 		}
 		pins_vector.clear();
 		if (route)
 			output_file << path;
 	}
+	cout << "\No. of nets routed = " << successful << "\nNo. of nets failed to route = " << unsuccessful << "\nNo. of nets partially routed = " << partial << endl;
 	input_file.close();
 	output_file.close();
 	return 0;
